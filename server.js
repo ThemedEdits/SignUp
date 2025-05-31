@@ -103,7 +103,6 @@ app.get('/profile', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'profile.html'));
 });
 
-
 // Serve static files from public directory
 app.use(express.static('public'));
 app.post('/api/signup', async (req, res) => {
@@ -274,27 +273,7 @@ app.use((err, req, res, next) => {
   res.status(500).json({ success: false, message: 'Something went wrong!' });
 });
 
-app.listen(port, '0.0.0.0', () => {
-  console.log(`Server running at http://localhost:${port}`);
-  console.log(`Access on your network at: http://${getIPAddress()}:${port}`);
-});
-
-// Add this function to get your local IP
-function getIPAddress() {
-  const interfaces = require('os').networkInterfaces();
-  for (const devName in interfaces) {
-    const iface = interfaces[devName];
-    for (let i = 0; i < iface.length; i++) {
-      const alias = iface[i];
-      if (alias.family === 'IPv4' && alias.address !== '127.0.0.1' && !alias.internal) {
-        return alias.address;
-      }
-    }
-  }
-  return '0.0.0.0';
-}
-
-// start server
+// Start server
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
 });
