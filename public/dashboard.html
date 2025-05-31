@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard | Auth System</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/transitions.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body class="page-transition">
+  <div class="dashboard-layout">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <img src="/images/logo.svg" alt="Logo" class="logo">
+      </div>
+      
+      <nav class="sidebar-nav">
+        <a href="/dashboard" class="nav-item active">
+          <i class="fas fa-tachometer-alt"></i>
+          <span>Dashboard</span>
+        </a>
+        <a href="#" class="nav-item">
+          <i class="fas fa-user"></i>
+          <span>Profile</span>
+        </a>
+        <a href="#" class="nav-item">
+          <i class="fas fa-cog"></i>
+          <span>Settings</span>
+        </a>
+        <a href="#" class="nav-item" id="logoutBtn">
+          <i class="fas fa-sign-out-alt"></i>
+          <span>Logout</span>
+        </a>
+      </nav>
+      
+      <div class="sidebar-footer">
+        <div class="user-profile">
+          <img id="sidebar-avatar" src="/images/default-avatar.png" alt="User">
+          <div>
+            <span id="sidebar-username">Username</span>
+            <small id="sidebar-email">user@example.com</small>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="main-header">
+        <h1>Dashboard</h1>
+        <div class="header-actions">
+          <div class="notification">
+            <i class="fas fa-bell"></i>
+            <span class="badge">3</span>
+          </div>
+        </div>
+      </header>
+
+      <div class="content-wrapper">
+        <div class="welcome-banner">
+          <div class="welcome-text">
+            <h2>Welcome back, <span id="dashboard-username">User</span>!</h2>
+            <p>Here's what's happening with your account today.</p>
+          </div>
+          <div class="welcome-stats">
+            <div class="stat-card">
+              <i class="fas fa-calendar-check"></i>
+              <div>
+                <span>5</span>
+                <small>Upcoming</small>
+              </div>
+            </div>
+            <div class="stat-card">
+              <i class="fas fa-tasks"></i>
+              <div>
+                <span>12</span>
+                <small>Tasks</small>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="dashboard-grid">
+          <div class="card recent-activity">
+            <div class="card-header">
+              <h3>Recent Activity</h3>
+              <a href="#" class="view-all">View All</a>
+            </div>
+            <div class="card-body">
+              <div class="activity-item">
+                <div class="activity-icon success">
+                  <i class="fas fa-check"></i>
+                </div>
+                <div class="activity-details">
+                  <p>You logged in successfully</p>
+                  <small>Just now</small>
+                </div>
+              </div>
+              <!-- More activity items -->
+            </div>
+          </div>
+
+          <div class="card quick-actions">
+            <div class="card-header">
+              <h3>Quick Actions</h3>
+            </div>
+            <div class="card-body">
+              <button class="action-btn">
+                <i class="fas fa-plus"></i>
+                <span>Create New</span>
+              </button>
+              <button class="action-btn">
+                <i class="fas fa-upload"></i>
+                <span>Upload Files</span>
+              </button>
+              <button class="action-btn">
+                <i class="fas fa-share-alt"></i>
+                <span>Share</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/auth.js"></script>
+  <script src="js/admin.js"></script>
+  <script src="js/transitions.js"></script>
+</body>
+</html>
