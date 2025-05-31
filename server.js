@@ -24,52 +24,16 @@ process.on('unhandledRejection', (err) => {
   console.error('Unhandled Rejection:', err);
 });
 
-// Replace the database initialization with:
-const db = new sqlite3.Database(path.join(__dirname, 'database.db'), (err) => {
-  if (err) {
-    console.error('Database connection error:', err);
-  } else {
-    console.log('Connected to the database');
-    
-    // Create tables inside this callback to ensure DB is ready
-    db.run(`
-      CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE,
-        email TEXT UNIQUE,
-        password TEXT,
-        is_admin INTEGER DEFAULT 0
-      )`, (err) => {
-      if (err) {
-        console.error('Table creation error:', err);
-      } else {
-        console.log('Users table ready');
-        
-        // Check for admin user
-        db.get("SELECT * FROM users WHERE is_admin = 1", [], (err, row) => {
-          if (err) {
-            console.error('Admin check error:', err);
-          } else if (!row) {
-            const adminUsername = 'admin';
-            const adminEmail = 'admin@example.com';
-            const adminPassword = bcrypt.hashSync('admin123', 8);
-            
-            db.run(
-              "INSERT INTO users (username, email, password, is_admin) VALUES (?, ?, ?, ?)",
-              [adminUsername, adminEmail, adminPassword, 1],
-              (err) => {
-                if (err) {
-                  console.error('Admin creation error:', err);
-                } else {
-                  console.log('Default admin user created');
-                }
-              }
-            );
-          }
-        });
-      }
-    });
-  }
+// Replace your database initialization with:
+const { Pool } = require('pg');
+const pool = new Pool({
+  connectionString: process.env.POSTGRES_URL,
+  ssl: { rejectUnauthorized: false }
+});
+
+// Example query:
+pool.query('SELECT * FROM users', (err, res) => {
+  console.log(err, res);
 });
 
 // Middleware
