@@ -1,73 +1,94 @@
-require('dotenv').config();
 const express = require('express');
-const { db } = require('@vercel/postgres');
+const sqlite3 = require('sqlite3').verbose();
 const bcrypt = require('bcryptjs');
 const bodyParser = require('body-parser');
 const cookieParser = require('cookie-parser');
 const session = require('express-session');
 const path = require('path');
-const cors = require('cors');
+
 
 const app = express();
-const port = process.env.PORT || 3000;
-
-// Middleware
+const port = 3000;
+const cors = require('cors');
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: 'http://localhost:3000',
   credentials: true
 }));
 
-app.use(bodyParser.json());
+// Add this right after your requires at the top
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+});
+
+process.on('unhandledRejection', (err) => {
+  console.error('Unhandled Rejection:', err);
+});
+
+// Replace the database initialization with:
+const db = new sqlite3.Database(path.join(__dirname, 'database.db'), (err) => {
+  if (err) {
+    console.error('Database connection error:', err);
+  } else {
+    console.log('Connected to the database');
+    
+    // Create tables inside this callback to ensure DB is ready
+    db.run(`
+      CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE,
+        email TEXT UNIQUE,
+        password TEXT,
+        is_admin INTEGER DEFAULT 0
+      )`, (err) => {
+      if (err) {
+        console.error('Table creation error:', err);
+      } else {
+        console.log('Users table ready');
+        
+        // Check for admin user
+        db.get("SELECT * FROM users WHERE is_admin = 1", [], (err, row) => {
+          if (err) {
+            console.error('Admin check error:', err);
+          } else if (!row) {
+            const adminUsername = 'admin';
+            const adminEmail = 'admin@example.com';
+            const adminPassword = bcrypt.hashSync('admin123', 8);
+            
+            db.run(
+              "INSERT INTO users (username, email, password, is_admin) VALUES (?, ?, ?, ?)",
+              [adminUsername, adminEmail, adminPassword, 1],
+              (err) => {
+                if (err) {
+                  console.error('Admin creation error:', err);
+                } else {
+                  console.log('Default admin user created');
+                }
+              }
+            );
+          }
+        });
+      }
+    });
+  }
+});
+
+// Middleware
 app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.json());
 app.use(cookieParser());
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'your-secret-key-here-make-it-long-and-complex',
+  secret: 'your-secret-key-here-make-it-long-and-complex',
   resave: false,
   saveUninitialized: false,
   cookie: { 
-    secure: process.env.NODE_ENV === 'production',
+    secure: false,
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000,
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
+    maxAge: 24 * 60 * 60 * 1000
   }
 }));
 
 // Serve static files
 app.use(express.static(path.join(__dirname, 'public')));
-
-// Database initialization
-async function initializeDatabase(client) {
-  try {
-    // Create users table
-    await client.sql`
-      CREATE TABLE IF NOT EXISTS users (
-        id SERIAL PRIMARY KEY,
-        username VARCHAR(255) UNIQUE NOT NULL,
-        email VARCHAR(255) UNIQUE NOT NULL,
-        password VARCHAR(255) NOT NULL,
-        is_admin BOOLEAN DEFAULT FALSE,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-      )
-    `;
-
-    // Check for admin user
-    const { rows } = await client.sql`
-      SELECT * FROM users WHERE is_admin = TRUE LIMIT 1
-    `;
-
-    if (rows.length === 0) {
-      const adminPassword = await bcrypt.hash('admin123', 8);
-      await client.sql`
-        INSERT INTO users (username, email, password, is_admin)
-        VALUES ('admin', 'admin@example.com', ${adminPassword}, TRUE)
-      `;
-      console.log('Default admin user created');
-    }
-  } catch (error) {
-    console.error('Database initialization error:', error);
-    throw error;
-  }
-}
 
 // Routes
 app.get('/', (req, res) => {
@@ -82,13 +103,13 @@ app.get('/profile', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'profile.html'));
 });
 
-// API Endpoints
+
+// Serve static files from public directory
+app.use(express.static('public'));
 app.post('/api/signup', async (req, res) => {
-  let client;
   try {
     const { username, email, password } = req.body;
     
-    // Validation
     if (!username || !email || !password) {
       return res.status(400).json({ 
         success: false, 
@@ -103,94 +124,62 @@ app.post('/api/signup', async (req, res) => {
       });
     }
 
-    client = await db.connect();
     const hashedPassword = await bcrypt.hash(password, 8);
     
-    // Insert new user
-    const { rows } = await client.sql`
-      INSERT INTO users (username, email, password)
-      VALUES (${username}, ${email}, ${hashedPassword})
-      RETURNING id, is_admin
-    `;
+    db.run(
+      "INSERT INTO users (username, email, password) VALUES (?, ?, ?)",
+      [username, email, hashedPassword],
+      function(err) {
+        if (err) {
+          console.error('Database error:', err);
+          if (err.message.includes('UNIQUE constraint failed')) {
+            return res.status(400).json({ 
+              success: false, 
+              message: 'Username or email already exists' 
+            });
+          }
+          return res.status(500).json({ 
+            success: false, 
+            message: 'Database error occurred' 
+          });
+        }
 
-    const newUser = rows[0];
-    req.session.userId = newUser.id;
-    req.session.isAdmin = newUser.is_admin;
-    
-    return res.json({ 
-      success: true, 
-      userId: newUser.id,
-      isAdmin: newUser.is_admin
-    });
-  } catch (error) {
-    console.error('Signup error:', error);
-    
-    if (error.message.includes('duplicate key')) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Username or email already exists' 
-      });
-    }
-    
+        req.session.userId = this.lastID;
+        req.session.isAdmin = 0;
+        
+        return res.json({ 
+          success: true, 
+          userId: this.lastID,
+          isAdmin: false
+        });
+      }
+    );
+  } catch (err) {
+    console.error('Signup error:', err);
     return res.status(500).json({ 
       success: false, 
       message: 'Internal server error' 
     });
-  } finally {
-    if (client) client.release();
   }
 });
 
-app.post('/api/login', async (req, res) => {
-  let client;
-  try {
-    const { username, password } = req.body;
+
+app.post('/api/login', (req, res) => {
+  const { username, password } = req.body;
+  
+  db.get("SELECT * FROM users WHERE username = ?", [username], (err, user) => {
+    if (err || !user || !bcrypt.compareSync(password, user.password)) {
+      return res.status(401).json({ success: false, message: 'Invalid credentials' });
+    }
     
-    if (!username || !password) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Username and password are required' 
-      });
-    }
-
-    client = await db.connect();
-    const { rows } = await client.sql`
-      SELECT * FROM users WHERE username = ${username} LIMIT 1
-    `;
-
-    if (rows.length === 0) {
-      return res.status(401).json({ 
-        success: false, 
-        message: 'Invalid credentials' 
-      });
-    }
-
-    const user = rows[0];
-    const isMatch = await bcrypt.compare(password, user.password);
-    
-    if (!isMatch) {
-      return res.status(401).json({ 
-        success: false, 
-        message: 'Invalid credentials' 
-      });
-    }
-
     req.session.userId = user.id;
     req.session.isAdmin = user.is_admin;
     
-    return res.json({ 
+    res.json({ 
       success: true, 
       isAdmin: user.is_admin 
     });
-  } catch (error) {
-    console.error('Login error:', error);
-    return res.status(500).json({ 
-      success: false, 
-      message: 'Internal server error' 
-    });
-  } finally {
-    if (client) client.release();
-  }
+  });
 });
 
 app.post('/api/logout', (req, res) => {
@@ -200,32 +189,22 @@ app.post('/api/logout', (req, res) => {
       return res.status(500).json({ success: false, message: 'Logout failed' });
     }
     
-    res.clearCookie('connect.sid');
+    res.clearCookie('connect.sid'); // This should match your session cookie name
     return res.json({ success: true });
   });
 });
 
-app.get('/api/user', async (req, res) => {
-  let client;
-  try {
-    if (!req.session.userId) {
-      return res.status(401).json({ success: false, message: 'Not authenticated' });
-    }
-
-    client = await db.connect();
-    const { rows } = await client.sql`
-      SELECT id, username, email, is_admin 
-      FROM users 
-      WHERE id = ${req.session.userId}
-      LIMIT 1
-    `;
-
-    if (rows.length === 0) {
+app.get('/api/user', (req, res) => {
+  if (!req.session.userId) {
+    return res.status(401).json({ success: false, message: 'Not authenticated' });
+  }
+  
+  db.get("SELECT id, username, email, is_admin FROM users WHERE id = ?", [req.session.userId], (err, user) => {
+    if (err || !user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
-
-    const user = rows[0];
-    return res.json({ 
+    
+    res.json({ 
       success: true, 
       user: {
         id: user.id,
@@ -234,56 +213,88 @@ app.get('/api/user', async (req, res) => {
         isAdmin: user.is_admin
       }
     });
-  } catch (error) {
-    console.error('User fetch error:', error);
-    return res.status(500).json({ success: false, message: 'Database error' });
-  } finally {
-    if (client) client.release();
-  }
+  });
 });
 
-app.get('/api/admin/users', async (req, res) => {
-  let client;
-  try {
-    if (!req.session.userId || !req.session.isAdmin) {
-      return res.status(403).json({ success: false, message: 'Unauthorized' });
+app.get('/api/admin/users', (req, res) => {
+  if (!req.session.userId || !req.session.isAdmin) {
+    return res.status(403).json({ success: false, message: 'Unauthorized' });
+  }
+  
+  db.all("SELECT id, username, email, is_admin FROM users", [], (err, users) => {
+    if (err) {
+      return res.status(500).json({ success: false, message: 'Database error' });
     }
-
-    client = await db.connect();
-    const { rows } = await client.sql`
-      SELECT id, username, email, is_admin 
-      FROM users
-    `;
-
-    return res.json({ success: true, users: rows });
-  } catch (error) {
-    console.error('Admin users fetch error:', error);
-    return res.status(500).json({ success: false, message: 'Database error' });
-  } finally {
-    if (client) client.release();
-  }
+    
+    res.json({ success: true, users });
+  });
 });
 
-// Error handling middleware
+app.post('/api/login', (req, res) => {
+  const { username, password } = req.body;
+  
+  if (!username || !password) {
+    return res.status(400).json({ success: false, message: 'Username and password are required' });
+  }
+  
+  db.get("SELECT * FROM users WHERE username = ?", [username], (err, user) => {
+    if (err) {
+      console.error('Login error:', err);
+      return res.status(500).json({ success: false, message: 'Database error' });
+    }
+    
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Invalid credentials' });
+    }
+    
+    bcrypt.compare(password, user.password, (err, isMatch) => {
+      if (err) {
+        console.error('Password compare error:', err);
+        return res.status(500).json({ success: false, message: 'Authentication error' });
+      }
+      
+      if (!isMatch) {
+        return res.status(401).json({ success: false, message: 'Invalid credentials' });
+      }
+      
+      req.session.userId = user.id;
+      req.session.isAdmin = user.is_admin;
+      
+      res.json({ 
+        success: true, 
+        isAdmin: user.is_admin 
+      });
+    });
+  });
+});
+
+// Add error handling middleware (add this near the end, before app.listen):
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ success: false, message: 'Something went wrong!' });
 });
 
-// Start server
-async function startServer() {
-  const client = await db.connect();
-  try {
-    await initializeDatabase(client);
-    app.listen(port, () => {
-      console.log(`Server running on port ${port}`);
-    });
-  } catch (error) {
-    console.error('Failed to initialize database:', error);
-    process.exit(1);
-  } finally {
-    client.release();
+app.listen(port, '0.0.0.0', () => {
+  console.log(`Server running at http://localhost:${port}`);
+  console.log(`Access on your network at: http://${getIPAddress()}:${port}`);
+});
+
+// Add this function to get your local IP
+function getIPAddress() {
+  const interfaces = require('os').networkInterfaces();
+  for (const devName in interfaces) {
+    const iface = interfaces[devName];
+    for (let i = 0; i < iface.length; i++) {
+      const alias = iface[i];
+      if (alias.family === 'IPv4' && alias.address !== '127.0.0.1' && !alias.internal) {
+        return alias.address;
+      }
+    }
   }
+  return '0.0.0.0';
 }
 
-startServer();
+// start server
+app.listen(port, () => {
+  console.log(`Server running at http://localhost:${port}`);
+});
