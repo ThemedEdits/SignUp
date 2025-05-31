@@ -10,12 +10,14 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@vercel/postgres": "^0.10.0",
     "bcryptjs": "^3.0.2",
     "body-parser": "^2.2.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "express": "^5.1.0",
     "express-session": "^1.18.1",
+    "postgres": "^3.4.7",
     "sqlite3": "^5.1.7"
   }
 }
